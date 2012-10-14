@@ -1,0 +1,36 @@
+CREATED: 10/14/12
+MOST RECENT EDIT: 10/14/12
+NYPLmenus is a class for accessing the API for the New York Public Library's What's on the Menu? project.
+
+See http://menus.nypl.org/ for more information on the WotM project itself, and http://nypl.github.com/menus-api/ for more information on the API and how to get an access token.
+
+The class MUST be initialized with an access token. http://nypl.github.com/menus-api/ has information on how to obtain one. The __init__ is written to allow the token to either be inserted when the class is initialized, or directly into the code itself. (See the comment on line 10.)
+
+The class uses the Requests library to access the data. See http://docs.python-requests.org/en/latest/ for more information. 
+
+The main method is get_menus, which accesses http://api.nypl.org/menus in one of two ways. If you supply the method with the id of a specific menu, it will retrieve that specific menu. Without a menu id, the method will retrieve menus page by page until the last page is reached, or your token's daily ratelimit is exceeded. There is also an optional max_pages parameter that, if provided, will cap the number of pages accessed.
+
+Unless dishes is set to False, get_menus will call get_dishes for each menu accessed. Each call to get_dishes involves accessing the API and will count against your ratelimit, so if you're concerned about conserving your token's limit, and aren't concerned about dish-specific information, set dishes to False.
+
+Menu information is stored in a dictionary, self.menus, in Unicode format. Dish information is stored as a sub-dictionary, self.menus[MENUNAME]["dishes"]. The keys of self.menus are the names of the menus, which are either the name of the restaurant and the date of the menu (in MMDDYYYY format) separated by an underscore, if the restaurant name is available, or the menu id. If the restaurant name is available but the date isn't given, the date will be NONE. Thus, potential keys are "Zen Palate_03191999", "Applebee's_NONE", or a five-digit menu ID number. Bear in mind that these keys are generated dynamically, and could change as the publicly-available data is updated. 
+
+Each menu is stored in self.menus as a dictionary. The information stored in the dictionaries, and their keys, are as follows:
+	"location" : The name of the restaurant.
+	"date" : The date of the menu.
+	"currency" : The currency of the menu.
+	"dishes_link" : The url of the menu's dishes. This is used by get_dishes.
+	"event" : The event associated with the menu.
+	"id" : The menu's 5-digit id.
+	"lang" : The language the menu is written in.
+	"place" : The place where the menu was created. NOTE: at this point, "place" seems absent for many of the menus. Furthermore, there doesn't seem to be any consistent differentiation between "place" and "location". This could very well change as the data is filled out and normalized.
+	"dishes" : The menu's dishes. See below for further information.
+	
+"dishes" is a dictionary itself. Its keys are the names of the dishes, its values are dictionaries with the following keys and values:
+	"high" : The highest noted price of the dish.
+	"low" : The lowest noted price of the dish.
+	"price" : The price of the dish as given on the menu.
+	"latest" : The time and date of the latest annotation of the dish, formatted YYYY-MM-DDTHH:mm:msZ
+
+Thus, the price of a dish is stored as self.menus[MENUNAME]["dishes"][DISHNAME]["price"].
+NOTE: Dish names are automatically extracted, and can be quite long, as they sometimes include descriptions of the dish. Ideally, this will be addressed in the near future.
+	
