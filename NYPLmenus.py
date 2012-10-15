@@ -9,12 +9,16 @@ class NYPLmenus:
 		for more information."""
 		self.token = token or ""	##Add your own token here, then you won't need to put
 									##in every time.
+		assert self.token != (None or "")
 		self.root = "http://api.menus.nypl.org/"
 		
 	def get_menus(self,dishes=True,max_pages=None,id=None,menu_timeouts=50,dishes_timeouts=20,*parameters):
 		"""Access NYPL's Menus API & retrieves menus & dishes
 		menus saved to self.menu, a dictionary whose keys are either location+date (if
 		location is available) or menu id #
+		:param dishes: if True, information for the menu's dishes will be accessed via get_dishes
+		NOTE: get_dishes accesses the API for each menu on the page; each call counts against your daily ratelimit.
+		:type dishes: bool
 		:param max_pages: maximum number of pages to be accessed. Each page contains 50 menus;
 		if max_pages is set to None, get_menus will keep accessing menus until the final page is reached
 		or your token's daily ratelimit is reached.* NB: If id is given, only that menu
@@ -77,8 +81,8 @@ class NYPLmenus:
 					md_location = menu["id"]
 				else:
 					md_location = menu["location"]		
-				md_name = "%s_%s"%(md["location"],md["date"])
-				if md_name not in self.menus.keys()
+				md_name = "%s_%s"%(md_location,md_date)
+				if md_name not in self.menus.keys():
 					md = {}
 					md["location"] = md_location
 					md["date"] = md_date
