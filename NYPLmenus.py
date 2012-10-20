@@ -1,3 +1,23 @@
+def html_pprint(req,decode_unicode=True,pprint=True):
+	"""Retrieve & optionally pretty-print html content of requests response
+	:param req: response returned by requests.get
+	:type req: response <response> object
+	:param decode_unicode: whether unicode in the content should be decoded (passed to response
+	object's decode_unicode parameter)
+	:type decode_unicode: bool
+	"""
+	lines = req.iter_lines(decode_unicode)
+	content = []
+	while True:
+		try:
+			content.append(lines.next())
+		except StopIteration:
+			break
+	if pprint == True:
+		for x in content:
+			print x
+	else:
+		return content
 class NYPLmenus:
 	import requests
 	import re
@@ -9,7 +29,10 @@ class NYPLmenus:
 		for more information."""
 		self.token = token or ""	##Add your own token here, then you won't need to put
 									##in every time.
-		assert self.token != (None or "")
+		try:
+			assert self.token
+		except AssertionError:
+			print "You forgot your token!"
 		self.root = "http://api.menus.nypl.org/"
 		
 	def get_menus(self,dishes=True,max_pages=None,id=None,menu_timeouts=50,dishes_timeouts=20,*parameters):
@@ -67,7 +90,7 @@ class NYPLmenus:
 					i += 1
 					print "Trying...%d"%(i)
 			if menus_json == None:
-				return "Error: Timeout trying to access menus on page %s. Please try again later."%(self.current)
+				return """Error: Timeout trying to access menus on page %s. Please try again later. %d menus retrieved."""%(self.current,len(self.menus))
 			else:
 				remaining_requests = r.headers["x-ratelimit-remaining"]
 				print "Menus on page %s accessed successfully. Your token %s has %s requests left for the day"\
@@ -111,6 +134,13 @@ class NYPLmenus:
 					self.current = self.re.match(next_p,r.headers["link"]).group(2)
 				except TypeError:
 					continue
+		print "%d menus retrieved." %(len(self.menus))
+		self.restaurants = self.menus.keys()
+		self.dishes = []
+		for x in xrange(len(self.restaurants)):
+			dishes = self.restaurants[x].keys()
+			for y in xrange(len(dishes)):
+				self.dishes.append(dishes[y])
 	def tryer(self,source,goal):
 		try:
 			return source[goal]
@@ -136,10 +166,162 @@ class NYPLmenus:
 				d["price"] = self.tryer(dish,"price")
 				d["latest"] = self.tryer(dish,"updated_at")
 				dishes[dish["name"]] = d
-		except KeyError:
+		except:
 			return None
 		print "Dishes for menu id # %s accessed successfully."%(id), 
 		print "Your token %s has %s requests left for the day."%(self.token,r.headers["x-ratelimit-remaining"])
 		return dishes
 
-			
+	def get_dishesDict(self):
+		self.dishesDict = {}
+		for x in xrange(len(self.menus.items())):
+			for y in xrange(len(self.menus.items()[x][1]["dishes"].items())):
+				dishName = self.menus.items()[x][1]["dishes"].items()[y][0]
+				dishList = self.menus.items()[x][1]["dishes"].items()[y][0].split()
+				self.dishesDict[dishName] = dishList
+
+class Wikirecipes:
+	import requests
+	import re
+	def __init__(self):
+		self.page_pat = "http://en.wikibooks.org/w/index.php?title=Category:Recipes&pagefrom="
+		self.reci_p = self.re.compile(r'title=\"Cookbook:(.*?)\">')
+		self.recipes = set()
+	def get_recipes(self):
+		letters = ["0","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P",
+		"Q","R","S","T","U","V","W","X","Y","Z"]
+		for x in xrange(len(letters)):
+			print "Retrieving Wikibooks recipes starting with %s..."%(letters[x]),
+			url = "%s%s"%(self.page_pat,letters[x])
+			while True:
+				r = self.requests.get(url)
+				if self.re.search(self.reci_p,r.content):
+					recs = self.re.finditer(self.reci_p,r.content)
+					break
+				else:
+					continue
+			while True:
+				try:
+					self.recipes.add(recs.next().group(1))
+				except StopIteration:
+					break
+			print "Done"
+class Allrecipes:
+	"""A class to retrieve recipes from Allrecipes.com."""
+	import requests
+	import re
+	def __init__(self):
+		self.root="http://allrecipes.com"
+		self.courses_pat = self.re.compile(r'<li>COURSES</li>(?P<courses>.*?)<li>INGREDIENTS AND METHODS</li>',self.re.S)
+		self.course_pat = self.re.compile(r'title=\"(?P<title>.*?)\" href=\"(?P<link>.*?)main\.aspx\"')
+		self.title_pat=self.re.compile(r'</style>\s+<title>\s+(?P<title>.*?) Recipes - Allrecipes\.com \(Pg\. (?P<pageno>\d+)\)')
+		self.rec_pat=self.re.compile(r"""href=\"http://allrecipes\.com/recipe/(?P<linkname>.*?) 
+									#group "linkname": name as it appears in the link
+									/detail\.aspx\">(?P<name>.*?)</a> #group "name": name as it appears in plaintext
+									""",self.re.X|self.re.I|self.re.S)
+									#not clear yet whether linkname or name will be
+									#more helpful/easier to deal with
+	def main(self,**kwargs):
+		self.get_courses()
+		self.recipes=self.to_dict(*[self.get_recipes(course,**kwargs) for course in self.courses])
+	def get_courses(self,*courses):
+		"""Retrieve list of courses from Allrecipes.com
+		:param *courses: variable parameter of courses to include. get_courses will retrieve
+		all available courses, but if you know the names of the specific courses you'd like
+		to deal with, you can specify them.
+		:type *courses: str(s)
+		"""
+		url = "%s/%s"%(self.root,"recipes/main.aspx")
+		while True:
+			self.main = self.requests.get(url)
+			if "200" in repr(self.main):
+				break
+		self.m = self.re.search(self.courses_pat,self.main.content)
+		if self.m:
+			courses_generator = self.re.finditer(self.course_pat,self.m.group())
+		else:
+			raise Exception("Can't find courses in content of %s"%(url)) 
+		self.courses = []
+		while True:
+			try:
+				course = courses_generator.next()
+				print "Found course %s" %(course.group("title"))
+				self.courses.append((course.group("title"),course.group("link")))
+			except StopIteration:
+				break
+		if courses:
+			for course in self.courses:
+				if course[0] not in courses:
+					self.courses.remove(course)	
+	def get_recipes(self,course,maxpage=None,verbose=True):
+		"""Retrieves recipes from a supplied course category from Allrecipes.com.
+		:param course: course category (usu. supplied from get_courses)
+		:type course: tuple (fmt: (coursename,courselink)
+		:param maxpage: maximum page to retrieve. Allrecipes has A LOT of recipes, so it
+		might be worth only retrieving some of it.
+		:type maxpage: int or None
+		:param verbose: run get_recipes as verbose, printing out the category name and
+		page number of every page of recipes retrieved by the function.
+		:type verbose: bool
+		"""
+		while True:
+			r = self.requests.get("%s/%s/ViewAll.aspx"%(self.root,course[1]))
+			if "200" in repr(r):
+				break
+			else:
+				continue
+		title = course[0]
+		recs_iter = self.re.finditer(self.rec_pat,r.content)
+		recs = []
+		while True:
+			try:
+				recs.append((recs_iter.next().group("linkname"),recs_iter.next().group("name")))
+			except StopIteration:
+				break
+		print "Retrieved recipes for category %s on page 1"%(course[0])
+		i = 2
+		while True:
+			while True:
+				url = "%s/%s/ViewAll.aspx?Page=%d"%(self.root,course[1],i)
+				new_r = self.requests.get(url)
+				if "200" in repr(new_r):
+					break
+				else:
+					continue
+			m = self.re.search(self.title_pat,new_r.content)
+			if m:
+				pageno = self.re.search(self.title_pat,new_r.content).group("pageno")
+			else:
+				self.current=new_r
+				print "Stopping...current page saved as .current"
+				raise Exception("pattern %s failed on page %s"%(self.title_pat.pattern,url))
+			recs_iter = self.re.finditer(self.rec_pat,r.content)
+			while True:
+				try:
+					recs.append((recs_iter.next().group("linkname"),recs_iter.next().group("name")))
+				except StopIteration:
+					break
+			print "Retrieved recipes for category %s on page %d"%(course[0],i)
+			i += 1
+			if maxpage:
+				if i > maxpage:
+					break
+				else:
+					continue
+			else:
+				if i > pageno:
+					break
+				else:
+					continue
+		return title,recs
+	def to_dict(self,funcs):
+		"""Takes functions that return (str,list) and translates them into a dictionary
+		whose keys are the returned str(s) and whose values are the returned list(s)
+		:param *funcs: variable parameter of the functions to translate.
+		:type *funcs: function(s)
+		"""
+		d = {}
+		for func in func:
+			returned = func
+			d[returned[0]] = returned[1]
+		return d

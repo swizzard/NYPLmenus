@@ -1,12 +1,13 @@
 CREATED: 10/14/12
-MOST RECENT EDIT: 10/14/12
-NYPLmenus is a class for accessing the API for the New York Public Library's What's on the Menu? project.
+MOST RECENT EDIT: 10/20/12
+NYPLmenus is a class for accessing the API for the New York Public Library's What's on the Menu? project. The module also includes classes for accessing recipe names from the recipes section of Wikibooks and Allrecipes.com.
 
+The classes use the Requests library to access the data. See http://docs.python-requests.org/en/latest/ for more information. 
+
+Class NYPLmenus:
 See http://menus.nypl.org/ for more information on the WotM project itself, and http://nypl.github.com/menus-api/ for more information on the API and how to get an access token.
 
 The class MUST be initialized with an access token. http://nypl.github.com/menus-api/ has information on how to obtain one. The __init__ is written to allow the token to either be inserted when the class is initialized, or directly into the code itself. (See the comment on line 10.)
-
-The class uses the Requests library to access the data. See http://docs.python-requests.org/en/latest/ for more information. 
 
 The main method is get_menus, which accesses http://api.nypl.org/menus in one of two ways. If you supply the method with the id of a specific menu, it will retrieve that specific menu. Without a menu id, the method will retrieve menus page by page until the last page is reached, or your token's daily ratelimit is exceeded. There is also an optional max_pages parameter that, if provided, will cap the number of pages accessed.
 
@@ -33,4 +34,26 @@ Each menu is stored in self.menus as a dictionary. The information stored in the
 
 Thus, the price of a dish is stored as self.menus[MENUNAME]["dishes"][DISHNAME]["price"].
 NOTE: Dish names are automatically extracted, and can be quite long, as they sometimes include descriptions of the dish. Ideally, this will be addressed in the near future.
-	
+
+
+Class Wikirecipes:
+This class accesses the Recipes category of Wikibooks. Unlike the NYPLmenus class, the Wikirecipes and Allrecipes classes don't require access tokens.
+
+The main method is get_recipes, which goes page by page through Wikibooks' recipes and adds the recipe names to self.recipes. NOTE: because there is often content overlap between pages, self.recipes is a set.
+
+
+Class Allrecipes:
+This class accesses Allrecipes.com and retrieves recipes course-by-course. The list of courses accessed can be found in the left sidebar of http://allrecipes.com/recipes/main.aspx (NOTE: recipes are retrieved only from the pages listed under "COURSES." The pages listed under "INGREDIENTS AND METHODS" and "OCCASIONS AND COOKING STYLES" are not accessed; it is assumed these pages contain mostly the same recipes found under "COURSES," just organized in a different way.)
+
+There are several methods defined within this class:
+
+get_courses retrieves the courses from the main recipes page of Allrecipes. The course names, and links to the pages that house them, are stored in self.courses. get_courses takes an optional variable parameter, *courses, which is the names (as strings) of one or more courses. If you supply course names to get_courses, only those specified course names will be retained in self.courses.
+
+get_recipes retrieves recipe names from a supplied Allrecipes.com course page by page. get_recipes takes one mandatory argument, course, which is a tuple (coursename,courselink), where coursename is the name of the course (as a string), and courselink is the link to the (first) page for that course. self.courses is comprised of tuples formatted in exactly this way. get_recipes can also take two optional parameters. maxpage, if supplied, caps the number of pages retrieved for the supplied category at the value supplied. verbose is a boolean that, if True, causes get_recipes to print the category and page numbers as they're retrieved.
+
+to_dict translates the results of functions that output (str,list) and translates them into a dictionary whose keys are the output strings and whose values are the output lists. to_dict takes a variable parameter *funcs, which is the names of the functions to be translated into the dictionary.
+
+main brings all the above functions together, and could easily be the only method in Allrecipes you call. It calls get_courses, and then calls to_dict on a list of get_recipes instances called on self.courses. main takes an optional keyword parameter, **kwargs. **kwargs is passed to the get_recipes instances called on the courses in self.courses, and should thus consist of specified values for maxpage and verbose. See the documentation on get_recipes, above, for more information.
+
+
+There is also a "free-standing" method defined in the NYPLmenus module: html_pprint. This method takes a requests <response> object (see http://docs.python-requests.org/en/latest/ for more information) and turns its content into a list of strings. Each string is a line, as read by the <response> object's iter_lines method. html_pprint takes two optional parameters. decode_unicode is a boolean which is passed directly to the <response> item's iter_lines method: if True, unicode in the content of the <response> object is decoded according to the <response> object's iter_lines method. The other optional parameter pprint is a boolean that, if True, results in list of strings being printed out item-by-item, providing a pretty-printed, human-readable representation of the <response> object's content. If pprint is False, html_pprint will instead return the list of strings for further processing.
