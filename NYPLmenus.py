@@ -221,6 +221,7 @@ class Allrecipes:
 									""",self.re.X)
 									#not clear yet whether linkname or name will be
 									#more helpful/easier to deal with
+		self.cont_pat=self.re.compile(r'<a href=\"http://allrecipes\.com/recipes/.*?/ViewAll\.aspx\?Page=\d+">NEXT',self.re.U)
 	def main(self,**kwargs):
 		self.get_courses()
 		self.recipes=self.to_dict([self.get_recipes(course,**kwargs) for course in self.courses])
@@ -313,15 +314,14 @@ class Allrecipes:
 				break
 			i += 1
 			if maxpage:
-				if i > maxpage:
+				if i > maxpage or not self.re.search(self.cont_pat,new_r.content):
 					break
 				else:
 					continue
+			elif not self.re.search(self.cont_pat,new_r.content):
+				break
 			else:
-				if i > pageno:
-					break
-				else:
-					continue
+				continue
 		return title,recs
 	def to_dict(self,funcs):
 		"""Takes functions that return (str,list) and translates them into a dictionary
