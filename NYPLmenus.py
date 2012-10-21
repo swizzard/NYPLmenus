@@ -259,7 +259,9 @@ class Allrecipes:
 		:param course: course category (usu. supplied from get_courses)
 		:type course: tuple (fmt: (coursename,courselink)
 		:param maxpage: maximum page to retrieve. Allrecipes has A LOT of recipes, so it
-		might be worth only retrieving some of it.
+		might be worth only retrieving some of it. NOTE: if maxpage is higher than the page
+		number of the last page in the category, get_recipes will still terminate on that
+		page.
 		:type maxpage: int or None
 		:param verbose: run get_recipes as verbose, printing out the category name and
 		page number of every page of recipes retrieved by the function.
@@ -267,23 +269,9 @@ class Allrecipes:
 		:param escape: if True, escape HTML entities (&#34;,etc.) as text/unicode
 		:type escape: bool
 		"""
-		while True:
-			r = self.requests.get("%s/%s/ViewAll.aspx"%(self.root,course[1]))
-			if "200" in repr(r):
-				break
-			else:
-				continue
 		title = course[0]
-		recs_iter = self.re.finditer(self.rec_pat,r.content)
 		recs = []
-		while True:
-			try:
-				next = recs_iter.next()
-				recs.append(self.unescape(next.group("name")))
-			except StopIteration:
-				break
-		print "Retrieved recipes for category %s on page 1"%(course[0])
-		i = 2
+		i = 1
 		while True:
 			while True:
 				url = "%s/%s/ViewAll.aspx?Page=%d"%(self.root,course[1],i)
@@ -299,7 +287,7 @@ class Allrecipes:
 				self.current=new_r
 				print "Stopping...current page saved as .current"
 				raise Exception("pattern %s failed on page %s"%(self.title_pat.pattern,url))
-			recs_iter = self.re.finditer(self.rec_pat,r.content)
+			recs_iter = self.re.finditer(self.rec_pat,new_r.content)
 			while True:
 				try:
 					next = recs_iter.next()
