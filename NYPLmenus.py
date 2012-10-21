@@ -210,20 +210,20 @@ class Allrecipes:
 	"""A class to retrieve recipes from Allrecipes.com."""
 	import requests
 	import re
+	import htmlentitydefs
 	def __init__(self):
 		self.root="http://allrecipes.com"
 		self.courses_pat = self.re.compile(r'<li>COURSES</li>(?P<courses>.*?)<li>INGREDIENTS AND METHODS</li>',self.re.S)
 		self.course_pat = self.re.compile(r'title=\"(?P<title>.*?)\" href=\"(?P<link>.*?)main\.aspx\"')
 		self.title_pat=self.re.compile(r'</style>\s+<title>\s+(?P<title>.*?) Recipes - Allrecipes\.com \(Pg\. (?P<pageno>\d+)\)')
-		self.rec_pat=self.re.compile(r"""href=\"http://allrecipes\.com/recipe/(?P<linkname>.*?) 
-									#group "linkname": name as it appears in the link
-									/detail\.aspx\">(?P<name>.*?)</a> #group "name": name as it appears in plaintext
-									""",self.re.X|self.re.I|self.re.S)
+		self.rec_pat=self.re.compile(r"""href=\"http://allrecipes\.com/recipe/.*?
+									/detail\.aspx\">(?P<name>.*?)</a>\s+</h3> #group "name": name as it appears in plaintext
+									""",self.re.X)
 									#not clear yet whether linkname or name will be
 									#more helpful/easier to deal with
 	def main(self,**kwargs):
 		self.get_courses()
-		self.recipes=self.to_dict(*[self.get_recipes(course,**kwargs) for course in self.courses])
+		self.recipes=self.to_dict([self.get_recipes(course,**kwargs) for course in self.courses])
 	def get_courses(self,*courses):
 		"""Retrieve list of courses from Allrecipes.com
 		:param *courses: variable parameter of courses to include. get_courses will retrieve
@@ -253,7 +253,7 @@ class Allrecipes:
 			for course in self.courses:
 				if course[0] not in courses:
 					self.courses.remove(course)	
-	def get_recipes(self,course,maxpage=None,verbose=True):
+	def get_recipes(self,course,maxpage=None,verbose=True,escape=True):
 		"""Retrieves recipes from a supplied course category from Allrecipes.com.
 		:param course: course category (usu. supplied from get_courses)
 		:type course: tuple (fmt: (coursename,courselink)
@@ -263,6 +263,8 @@ class Allrecipes:
 		:param verbose: run get_recipes as verbose, printing out the category name and
 		page number of every page of recipes retrieved by the function.
 		:type verbose: bool
+		:param escape: if True, escape HTML entities (&#34;,etc.) as text/unicode
+		:type escape: bool
 		"""
 		while True:
 			r = self.requests.get("%s/%s/ViewAll.aspx"%(self.root,course[1]))
@@ -275,7 +277,8 @@ class Allrecipes:
 		recs = []
 		while True:
 			try:
-				recs.append((recs_iter.next().group("linkname"),recs_iter.next().group("name")))
+				next = recs_iter.next()
+				recs.append(self.unescape(next.group("name")))
 			except StopIteration:
 				break
 		print "Retrieved recipes for category %s on page 1"%(course[0])
@@ -298,10 +301,16 @@ class Allrecipes:
 			recs_iter = self.re.finditer(self.rec_pat,r.content)
 			while True:
 				try:
-					recs.append((recs_iter.next().group("linkname"),recs_iter.next().group("name")))
+					next = recs_iter.next()
+					if escape == True:
+						recs.append(self.unescape(next.group("name")))
+					else:
+						recs.append(next.group("name"))
 				except StopIteration:
 					break
 			print "Retrieved recipes for category %s on page %d"%(course[0],i)
+			if maxpage == 1:
+				break
 			i += 1
 			if maxpage:
 				if i > maxpage:
@@ -318,10 +327,37 @@ class Allrecipes:
 		"""Takes functions that return (str,list) and translates them into a dictionary
 		whose keys are the returned str(s) and whose values are the returned list(s)
 		:param *funcs: variable parameter of the functions to translate.
-		:type *funcs: function(s)
+		:type *funcs: iterable of functions
 		"""
 		d = {}
-		for func in func:
+		for func in funcs:
 			returned = func
 			d[returned[0]] = returned[1]
 		return d
+		
+	def unescape(self,text):
+	##Adapted from original written by Fredrik Lundh. Taken from http://effbot.org/zone/re-sub.htm#unescape-html
+	##via http://stackoverflow.com/questions/57708/convert-xml-html-entities-into-unicode-string-in-python
+	# Removes HTML or XML character references and entities from a text string.
+	#
+	# @param text The HTML (or XML) source text.
+	# @return The plain text, as a Unicode string, if necessary.	
+		def fixup(m):
+			text = m.group(0)
+			if text[:2] == "&#":
+				# character reference
+				try:
+					if text[:3] == "&#x":
+						return unichr(int(text[3:-1], 16))
+					else:
+						return unichr(int(text[2:-1]))
+				except ValueError:
+					pass
+			else:
+				# named entity
+				try:
+					text = unichr(self.htmlentitydefs.name2codepoint[text[1:-1]])
+				except KeyError:
+					pass
+			return text # leave as is
+		return self.re.sub("&#?\w+;", fixup, text)
